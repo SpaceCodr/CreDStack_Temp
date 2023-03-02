@@ -23,7 +23,7 @@ bcrypt = Bcrypt()
 
 
 def create_app():
-    app = Flask(__name__)
+    app = Flask(__name__,static_folder='static')
 
     app.secret_key = 'secret-key'
     app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///database.db"
