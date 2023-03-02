@@ -1,10 +1,11 @@
+import os
 from flask import Flask, redirect, render_template, request, send_file
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 import cv2
+from sqlalchemy.sql import func
 
-app = Flask(__name__)
-app._static_folder = 'L:/CreDStack/myproj/'
+app = Flask(__name__,static_folder='static')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///data.db'
 db = SQLAlchemy(app)
 
@@ -16,7 +17,8 @@ class Video(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(100), nullable=False)
     description = db.Column(db.String(500), nullable=False)
-    url = db.Column(db.String(200), nullable=False)
+    url = db.Column(db.String(200), nullable=False),
+    bio = db.Column(db.Text)
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -56,11 +58,11 @@ def index():
 @app.route('/watermark', methods=['POST'])
 def watermark():
     # Get user_info and video_info from the request
-    data=request.get_json()
-    user_info=data['user_info']
-    video_info=data['video_info']
-    #user_info = request.form.get('user_info')
-    #video_info = request.form.get('video_info')
+    # data=request.get_json()
+    # user_info=data['user_info']
+    # video_info=data['video_info']
+    user_info = request.form.get('user_info')
+    video_info = request.form.get('video_info')
 
     # Retrieve the corresponding video from local storage
     video_path = 'L:/CreDStack/myproj/' + video_info
@@ -96,10 +98,11 @@ def watermark():
     writer.release()
 
     # Send the watermarked video path and MIME type in a JSON response
-    return {'watermark_path': watermark_path, 'mime_type': 'video/mp4'}
+    # return {'watermark_path': watermark_path, 'mime_type': 'video/mp4'}
     # Send the watermarked video to the requester using Flask's send_file function
-    #return render_template('result.html',file=video_info)
-    #return send_file(watermark_path, mimetype='video/mp4', as_attachment=True)
+    return render_template('result.html',file=video_info)
+    # return render_template("index.html")
+    # return send_file(watermark_path, mimetype='video/mp4', as_attachment=True)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True,threaded=True)
