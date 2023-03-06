@@ -1,5 +1,9 @@
 import os
 import subprocess
+import ffmpeg_streaming
+from ffmpeg_streaming import Formats, Bitrate, Representation, Size
+
+
 
 from flask import (
     Flask,
@@ -41,7 +45,8 @@ from forms import login_form,register_form
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    return db.session.get(User,int(user_id))
+    # return User.query.get(int(user_id))
 
 app = create_app()
 
@@ -187,39 +192,84 @@ def viewlist():
 @app.route('/video/<int:video_id>')
 @login_required
 def video(video_id):
-    video = Videos.query.get_or_404(video_id)
-    # Check if video exists in the specified path
-    if not os.path.isfile('static/videos/'+video.title):
-        return 'Video not found', 404
+    video=Videos.query.get_or_404(video_id)
+    # # print(video.title)
+    # videofile=ffmpeg_streaming.input('static/videos/'+video.title)
 
-    range_header = request.headers.get('Range', None)
-    video_size = os.path.getsize('static/videos/'+video.title)
+    # _144p  = Representation(Size(256, 144), Bitrate(95 * 1024, 64 * 1024))
+    # _240p  = Representation(Size(426, 240), Bitrate(150 * 1024, 94 * 1024))
+    # _360p  = Representation(Size(640, 360), Bitrate(276 * 1024, 128 * 1024))
+    # _480p  = Representation(Size(854, 480), Bitrate(750 * 1024, 192 * 1024))
+    # _720p  = Representation(Size(1280, 720), Bitrate(2048 * 1024, 320 * 1024))
+    # _1080p = Representation(Size(1920, 1080), Bitrate(4096 * 1024, 320 * 1024))
+    # _2k    = Representation(Size(2560, 1440), Bitrate(6144 * 1024, 320 * 1024))
+    # _4k    = Representation(Size(3840, 2160), Bitrate(17408 * 1024, 320 * 1024))
+    # dash = videofile.dash(Formats.h264())
+    # dash.representations(_144p, _240p, _360p, _480p, _720p, _1080p, _2k, _4k)
+    # # dash.output('/static/videos/dash.mpd')
 
-    if range_header:
-        start, end = range_header.split('=')[1].split('-')
-        start = int(start)
-        end = int(end) if end else video_size - 1
-    else:
-        start = 0
-        end = video_size - 1
 
-    length = end - start + 1
+    # return 'DASH'
 
-    headers = {
-        'Content-Type': 'video/mp4',
-        'Content-Length': length,
-        'Content-Range': f"bytes {start}-{end}/{video_size}",
-        'Accept-Ranges': 'bytes',
-    }
+    # Specify the path to your video file
+    video_path = '/static/videos/'+video.title
 
-    p = subprocess.Popen(['ffmpeg', '-i', 'static/videos/'+video.title , '-ss', str(start), '-vframes', str(length), '-f', 'mp4', '-'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    # Open a subprocess to ffmpeg and read the video frame by frame
+    cmd = ['ffmpeg', '-i', video_path, '-f', 'image2pipe', '-pix_fmt', 'rgb24', '-vcodec', 'rawvideo', '-']
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
 
-    return Response(
-        p.stdout,
-        status=206 if range_header else 200,
-        headers=headers,
-        direct_passthrough=True,
-    )
+    # Yield the video frame by frame
+    while True:
+        frame = proc.stdout.read(1024*1024)
+        if not frame:
+            break
+        yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+
+    # Close the subprocess
+    proc.kill()
+    return Response(content_type='multipart/x-mixed-replace; boundary=frame')
+
+
+
+
+
+
+# @app.route('/video/<int:video_id>')
+# @login_required
+# def video(video_id):
+#     video = Videos.query.get_or_404(video_id)
+#     # Check if video exists in the specified path
+#     if not os.path.isfile('static/videos/'+video.title):
+#         return 'Video not found', 404
+
+#     range_header = request.headers.get('Range', None)
+#     video_size = os.path.getsize('static/videos/'+video.title)
+
+#     if range_header:
+#         start, end = range_header.split('=')[1].split('-')
+#         start = int(start)
+#         end = int(end) if end else video_size - 1
+#     else:
+#         start = 0
+#         end = video_size - 1
+
+#     length = end - start + 1
+
+#     headers = {
+#         'Content-Type': 'video/mp4',
+#         'Content-Length': length,
+#         'Content-Range': f"bytes {start}-{end}/{video_size}",
+#         'Accept-Ranges': 'bytes',
+#     }
+
+#     p = subprocess.Popen(['ffmpeg', '-i', 'static/videos/'+video.title , '-ss', str(start), '-vframes', str(length), '-f', 'mp4', '-'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+#     return Response(
+#         p.stdout,
+#         status=206 if range_header else 200,
+#         headers=headers,
+#         direct_passthrough=True,
+#     )
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0')
+    app.run(debug=True,host='0.0.0.0',port=4000)
