@@ -1,5 +1,8 @@
 import os
 import subprocess
+import sys
+import datetime
+import logging
 import ffmpeg_streaming
 from ffmpeg_streaming import Formats, Bitrate, Representation, Size
 
@@ -193,6 +196,41 @@ def viewlist():
 @login_required
 def video(video_id):
     video=Videos.query.get_or_404(video_id)
+    videofile=ffmpeg_streaming.input('static/videos/'+video.title)
+    
+    logging.basicConfig(filename='streaming.log', level=logging.NOTSET, format='[%(asctime)s] %(levelname)s: %(message)s')
+
+
+    def monitor(ffmpeg, duration, time_, time_left, process):
+        per = round(time_ / duration * 100)
+        sys.stdout.write(
+            "\rTranscoding...(%s%%) %s left [%s%s]" %
+            (per, datetime.timedelta(seconds=int(time_left)), '#' * per, '-' * (100 - per))
+        )
+        sys.stdout.flush()
+
+
+    # _360p  = Representation(Size(640, 360), Bitrate(276 * 1024, 128 * 1024))
+    _480p  = Representation(Size(854, 480), Bitrate(750 * 1024, 192 * 1024))
+    _720p  = Representation(Size(1280, 720), Bitrate(2048 * 1024, 320 * 1024))
+    dash = videofile.dash(Formats.h264())
+    dash.representations(_480p,_720p)
+
+    if videofile.hls_output:
+        dash.generate_hls_playlist()
+
+    # dash.output('http://127.0.0.1:4000/videosfiles/dash.mpd', monitor=monitor)
+
+    # hls = videofile.hls(Formats.h264())
+    # hls.auto_generate_representations()
+     
+
+
+
+
+
+
+
     # # print(video.title)
     # videofile=ffmpeg_streaming.input('static/videos/'+video.title)
 
@@ -205,29 +243,35 @@ def video(video_id):
     # _2k    = Representation(Size(2560, 1440), Bitrate(6144 * 1024, 320 * 1024))
     # _4k    = Representation(Size(3840, 2160), Bitrate(17408 * 1024, 320 * 1024))
     # dash = videofile.dash(Formats.h264())
+    # hls.representations(_144p, _240p, _360p, _480p, _720p, _1080p, _2k, _4k)
     # dash.representations(_144p, _240p, _360p, _480p, _720p, _1080p, _2k, _4k)
-    # # dash.output('/static/videos/dash.mpd')
+    # dash.output(monitor=monitor)
+    # hls.output(monitor=monitor) 
 
+    # video = ffmpeg_streaming.input('static/videos/ice2.m3u8')
 
-    # return 'DASH'
+    # stream = video.stream2file(Formats.h264())
+    # stream.output()
 
-    # Specify the path to your video file
-    video_path = '/static/videos/'+video.title
+    return render_template('video.html',videofile=videofile)
 
-    # Open a subprocess to ffmpeg and read the video frame by frame
-    cmd = ['ffmpeg', '-i', video_path, '-f', 'image2pipe', '-pix_fmt', 'rgb24', '-vcodec', 'rawvideo', '-']
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+    # # Specify the path to your video file
+    # video_path = '/static/videos/'+video.title
 
-    # Yield the video frame by frame
-    while True:
-        frame = proc.stdout.read(1024*1024)
-        if not frame:
-            break
-        yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+    # # Open a subprocess to ffmpeg and read the video frame by frame
+    # cmd = ['ffmpeg', '-i', video_path, '-f', 'image2pipe', '-pix_fmt', 'rgb24', '-vcodec', 'rawvideo', '-']
+    # proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
 
-    # Close the subprocess
-    proc.kill()
-    return Response(content_type='multipart/x-mixed-replace; boundary=frame')
+    # # Yield the video frame by frame
+    # while True:
+    #     frame = proc.stdout.read(1024*1024)
+    #     if not frame:
+    #         break
+    #     yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+
+    # # Close the subprocess
+    # proc.kill()
+    # return Response(content_type='multipart/x-mixed-replace; boundary=frame')
 
 
 
